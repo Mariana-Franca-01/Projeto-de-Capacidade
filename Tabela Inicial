@@ -1,0 +1,58 @@
+CREATE OR REPLACE TABLE
+  `br-apps-intelig-comercial-prd.ecomm_ops.projeto_capacidade_ecomm` AS
+WITH IPP AS
+(
+    SELECT 
+          LOJA
+          ,DIA_CRIA
+          ,UPPER (FORMAT_DATE('%A', DIA_CRIA)) as dia_semana
+          --,plataforma
+          --,tipo_entrega
+          ,COUNT(DISTINCT PEDIDO) AS QTD_PEDIDOS
+      FROM `br-cg-dadoscorporativos-prd.db_operacoes.tbl_IPP` WHERE INSERT_DATE >= CURRENT_DATE()-30
+      GROUP BY ALL
+)
+,
+FC AS 
+( 
+  SELECT DATE(ds) dia
+          ,store
+          --,segment AS Tamanho_pedido
+          ,SUM(yhat) AS qtd_pedidos
+    FROM `br-apps-analytics-bigdata-dev.db_ds_store_operations.tbl_gigpickers_forecast`
+  GROUP BY ALL
+)
+,capacidade AS
+(
+  SELECT CAST(REGEXP_EXTRACT(refId, r'\d+') AS STRING) AS loja
+         ,UPPER (startday) AS dia_semana
+         ,SUM(maxShippingQuantity) as qtd_pedidos
+     FROM `br-apps-intelig-comercial-prd.ecomm_ops.TBL_CAPACIDADE` a3
+    GROUP BY ALL
+)
+
+  SELECT 
+  a1.dia_cria,
+  a1.janela,
+  a1.cod_store,
+  a1.pedido,
+  a2.segment,
+  a2.yhat,
+  a2.dth_ingestion,
+  a2.ds,
+  a3.inicio,
+  a3.fim,
+  a3.minFulfillmentTime,
+  a3.maxShippingQuantity,
+FROM 
+  br-cg-dadoscorporativos-prd.db_operacoes.tbl_IPP AS a1
+LEFT JOIN 
+  br-apps-analytics-bigdata-dev.db_ds_store_operations.tbl_gigpickers_forecast AS a2 
+ON 
+  a1.cod_store = CAST(store AS STRING)
+LEFT JOIN 
+  `br-apps-intelig-comercial-prd.ecomm_ops.TBL_CAPACIDADE` AS a3 
+ON 
+  a1.cod_store = CAST(REGEXP_EXTRACT(refId, r'\d+') AS STRING)
+GROUP BY 
+  1,2,3,4,5,6,7,8,9,10,11,12;

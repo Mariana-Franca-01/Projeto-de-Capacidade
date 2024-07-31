@@ -5,7 +5,9 @@ WITH IPP AS (
           LOJA,
           DIA_CRIA,
           UPPER(FORMAT_DATE('%A', DIA_CRIA)) AS dia_semana,
-          --,plataforma,
+          --plataforma,
+          canal,
+          nome_loja,
           --,tipo_entrega,
           COUNT(DISTINCT PEDIDO) AS QTD_PEDIDOS_IPP
       FROM `br-cg-dadoscorporativos-prd.db_operacoes.tbl_IPP` WHERE INSERT_DATE >= CURRENT_DATE()-30
@@ -14,7 +16,8 @@ WITH IPP AS (
 ,
 FC AS 
 ( 
-  SELECT DATE(ds) dia,
+  SELECT 
+    DATE(ds) dia,
           store,
           segment AS Tamanho_pedido,
           SUM(yhat) AS QTD_PEDIDOS_FC
@@ -23,10 +26,21 @@ FC AS
 )
 ,capacidade AS
 (
-  SELECT REGEXP_EXTRACT(a3.refId, r'\d+') AS loja,
+  SELECT 
+    REGEXP_EXTRACT(a3.refId, r'\d+') AS loja,
          UPPER(startday) AS dia_semana,
          SUM(maxShippingQuantity) AS QTD_PEDIDOS_CAP
      FROM `br-apps-intelig-comercial-prd.ecomm_ops.TBL_CAPACIDADE` a3
+    GROUP BY ALL
+)
+,capact_out AS
+(
+  SELECT 
+    trading_name AS nome_loja,
+         UPPER(dia_semana),
+         canal,
+         perc_ocupacao_cr4
+     FROM `br-apps-intelig-comercial-prd.ecomm_ops.capact_CRFO_atacadão` a4
     GROUP BY ALL
 )
 SELECT 
@@ -36,12 +50,16 @@ SELECT
     a2.Tamanho_pedido,
     a2.QTD_PEDIDOS_FC,
     a3.QTD_PEDIDOS_CAP,
-    a1.loja
+    a1.loja,
+    a4.perc_ocupacao_cr4,
+    a1.canal
 FROM 
     IPP AS a1
 LEFT JOIN 
     FC AS a2 ON a1.LOJA = CAST(a2.store AS STRING)
 LEFT JOIN 
     capacidade AS a3 ON a1.LOJA = a3.loja
+LEFT JOIN
+    capact_out AS a4 ON a1.nome_loja = a4.nome_loja
 GROUP BY 
-    1, 2, 3, 4, 5, 6, 7;
+    1, 2, 3, 4, 5, 6, 7, 8, 9;

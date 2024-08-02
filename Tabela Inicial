@@ -2,45 +2,45 @@ CREATE OR REPLACE TABLE
   `br-apps-intelig-comercial-prd.ecomm_ops.projeto_capacidade_ecomm` AS
 WITH IPP AS (
     SELECT 
-          LOJA,
-          DIA_CRIA,
-          UPPER(FORMAT_DATE('%A', DIA_CRIA)) AS dia_semana,
-          --plataforma,
-          canal,
-          nome_loja,
-          --,tipo_entrega,
-          COUNT(DISTINCT PEDIDO) AS QTD_PEDIDOS_IPP
-      FROM `br-cg-dadoscorporativos-prd.db_operacoes.tbl_IPP` WHERE INSERT_DATE >= CURRENT_DATE()-30
-      GROUP BY ALL
-)
-,
+        LOJA,
+        DIA_CRIA,
+        UPPER(FORMAT_DATE('%A', DIA_CRIA)) AS dia_semana,
+        canal,
+        nome_loja,
+        env,
+        COUNT(DISTINCT PEDIDO) AS QTD_PEDIDOS_IPP
+    FROM `br-cg-dadoscorporativos-prd.db_operacoes.tbl_IPP` 
+    WHERE INSERT_DATE >= CURRENT_DATE()-30
+    GROUP BY ALL
+),
 FC AS 
 ( 
-  SELECT 
-    DATE(ds) dia,
-          store,
-          segment AS Tamanho_pedido,
-          SUM(yhat) AS QTD_PEDIDOS_FC
+    SELECT 
+        DATE(ds) dia,
+        store,
+        segment AS Tamanho_pedido,
+        SUM(yhat) AS QTD_PEDIDOS_FC
     FROM `br-apps-analytics-bigdata-dev.db_ds_store_operations.tbl_gigpickers_forecast`
-  GROUP BY ALL
-)
-,capacidade AS
-(
-  SELECT 
-    REGEXP_EXTRACT(a3.refId, r'\d+') AS loja,
-         UPPER(startday) AS dia_semana,
-         SUM(maxShippingQuantity) AS QTD_PEDIDOS_CAP
-     FROM `br-apps-intelig-comercial-prd.ecomm_ops.TBL_CAPACIDADE` a3
     GROUP BY ALL
-)
-,capact_out AS
+),
+capacidade AS
 (
-  SELECT 
-    trading_name AS nome_loja,
-         UPPER(dia_semana),
-         canal,
-         perc_ocupacao_cr4
-     FROM `br-apps-intelig-comercial-prd.ecomm_ops.capact_CRFO_atacadão` a4
+    SELECT 
+        REGEXP_EXTRACT(a3.refId, r'\d+') AS loja,
+        UPPER(startday) AS dia_semana,
+        SUM(maxShippingQuantity) AS QTD_PEDIDOS_CAP
+    FROM `br-apps-intelig-comercial-prd.ecomm_ops.TBL_CAPACIDADE` a3
+    GROUP BY ALL
+),
+capact_out AS
+(
+    SELECT 
+        trading_name AS nome_loja,
+        UPPER(dia_semana),
+        canal,
+        rede, 
+        capacidade
+    FROM `br-apps-intelig-comercial-prd.ecomm_ops.capact_CRFO_atacadão` a4
     GROUP BY ALL
 )
 SELECT 
@@ -51,8 +51,10 @@ SELECT
     a2.QTD_PEDIDOS_FC,
     a3.QTD_PEDIDOS_CAP,
     a1.loja,
-    a4.perc_ocupacao_cr4,
-    a1.canal
+    a1.canal,
+    a1.env, 
+    a4.rede,
+    a4.capacidade
 FROM 
     IPP AS a1
 LEFT JOIN 
@@ -62,4 +64,4 @@ LEFT JOIN
 LEFT JOIN
     capact_out AS a4 ON a1.nome_loja = a4.nome_loja
 GROUP BY 
-    1, 2, 3, 4, 5, 6, 7, 8, 9;
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11; 

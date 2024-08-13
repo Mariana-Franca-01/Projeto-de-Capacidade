@@ -1,83 +1,65 @@
 CREATE OR REPLACE TABLE
-  `br-apps-analytics-eng-prd.db_da_rep_supply.relatorio_ecommerce_alimentar_rep` AS
-  WITH a14 AS (
-    SELECT DISTINCT 
-      cod_order,
-      dt_partition
-    FROM `br-apps-dolphin-ddp-prd.db_dolphin_target_client.tbl_protocol`
-    WHERE ds_category NOT LIKE 'Suporte Multicanal%'
-  )
-SELECT
-  a11.ano,
-  a11.Id_cliente,
-  a11.Periodo,
-  a11.Status_questionario,
-  a11.Inicio_questionario,
-  a11.fim_questionario,
-  a11.Codigo_loja,
-  a11.Codigo_loja_Carrefour,
-  a11.Nome_loja,
-  a11.Email,
-  a11.Tipo_Dispositivo,
-  a11.Num_itens_pedido,
-  a11.NPS_Pedido,
-  a11.NPS_Entrega,
-  a11.Num_Pedido,
-  a11.Verbatim_Entrega,
-  a11.Verbatim_Pedido,
-  a11.PC_Variedade_produtos_frescos,
-  a11.PC_Clareza_ofertas_promocos,
-  a11.PC_Pedido_completo,
-  a11.PC_Prazo_proposto_entrega,
-  a11.PC_Disponibilidade_produto,
-  a11.PC_Respeito_prazos_validade_produtos,
-  a11.PC_Facilidade_buscar_localizar_produtos,
-  a11.PC_Frete,
-  a11.PC_Pontualidade_Entrega,
-  a11.PC_Informacoes_produtos,
-  a11.PC_Facilidade_navegar_site_app_carrefour,
-  a11.PC_Formas_pagamento_oferecidas,
-  a11.PC_Opcoes_entrega,
-  a11.PC_preco,
-  a11.PC_Promocoes_atrativas,
-  a11.PC_Qualidade_frescor_frutas_legumes_verduras,
-  a11.PC_Facilidade_fazer_pagamento_pedido,
-  a11.PC_Integridade_embalagem,
-  a11.PC_Acompanhamentos_status_pedido,
-  a11.PC_Variedade_produtos,
-  a11.PC_Velocidade_app_site,
-  a11.Ticket_Pedido,
-  a11.PC_Facilidade_contato_SAC,
-  a12.tipo_entrega,
-  a12.qtd_pedida,
-  a12.qtd_separada,
-  a12.qtd_substituida,
-  a12.onTime,
-  a12.tipo_subst,
-  a12.regional,
-  a12.grupo_pagamento,
-  a12.qtd_sku,
-  --a13.MOTIVO_DO_REAGENDAMENTO,
-  --a13.Status_de_reagendamento,
-  a14.ds_category,
-  a14.cod_order,
-  a15.NomeTransportadora, 
-  a15.Entregas_Pedidos_IdPedido, 
-  a15.NomeMotorista
-FROM
-  `br-apps-analytics-eng-prd.db_ae_rep_cie_data.relatorio_ecommerce_alimentar` AS a11
-INNER JOIN
-  `br-cg-dadoscorporativos-prd.db_operacoes.tbl_IPP` AS a12
-  ON
-  a11.Num_Pedido = a12.pedido
---LEFT JOIN `br-apps-intelig-comercial-prd.ecomm_ops.TBL_REAGENDAMENTO` AS a13 
-  --ON
-  --a11.Inicio_questionario = CAST(a13.N__MERO_DO_PEDIDO AS STRING))
-LEFT JOIN `br-apps-dolphin-ddp-prd.db_dolphin_target_client.tbl_protocol` AS a14
-ON
-  a11.Inicio_questionario = a14.dt_partition
-LEFT JOIN `br-apps-dolphin-ddp-prd.db_dolphin_datasharing_performaxxi.tbl_performaxxi_delivery_orders` AS a15 
-ON
-  a11.Num_Pedido = a15.Entregas_Pedidos_IdPedido
-GROUP BY
-  1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54;
+  `br-apps-intelig-comercial-prd.ecomm_ops.projeto_capacidade_ecomm` AS
+WITH IPP AS (
+    SELECT 
+        LOJA,
+        DIA_CRIA,
+        UPPER(FORMAT_DATE('%A', DIA_CRIA)) AS dia_semana,
+        canal,
+        nome_loja,
+        env,
+        COUNT(DISTINCT PEDIDO) AS QTD_PEDIDOS_IPP
+    FROM `br-cg-dadoscorporativos-prd.db_operacoes.tbl_IPP` 
+    WHERE INSERT_DATE >= CURRENT_DATE()-30
+    GROUP BY ALL
+),
+FC AS 
+( 
+    SELECT 
+        DATE(ds) dia,
+        store,
+        segment AS Tamanho_pedido,
+        SUM(yhat) AS QTD_PEDIDOS_FC
+    FROM `br-apps-analytics-bigdata-dev.db_ds_store_operations.tbl_gigpickers_forecast`
+    GROUP BY ALL
+),
+capacidade AS
+(
+    SELECT 
+        REGEXP_EXTRACT(a3.refId, r'\d+') AS loja,
+        UPPER(startday) AS dia_semana,
+        SUM(maxShippingQuantity) AS QTD_PEDIDOS_CAP
+    FROM `br-apps-intelig-comercial-prd.ecomm_ops.TBL_CAPACIDADE` a3
+    GROUP BY ALL
+),
+capact_out AS
+(
+    SELECT 
+        trading_name AS nome_loja,
+        UPPER(dia_semana),
+        canal,
+        rede
+    FROM `br-apps-intelig-comercial-prd.ecomm_ops.capact_CRFO_atacadão` a4
+    GROUP BY ALL
+)
+SELECT 
+    a1.DIA_CRIA,
+    a1.dia_semana,
+    a1.QTD_PEDIDOS_IPP,
+    a2.Tamanho_pedido,
+    a2.QTD_PEDIDOS_FC,
+    a3.QTD_PEDIDOS_CAP,
+    a1.loja,
+    a1.canal,
+    a1.env, 
+    a4.rede
+FROM 
+    IPP AS a1
+LEFT JOIN 
+    FC AS a2 ON a1.LOJA = CAST(a2.store AS STRING)
+LEFT JOIN 
+    capacidade AS a3 ON a1.LOJA = a3.loja
+LEFT JOIN
+    capact_out AS a4 ON a1.nome_loja = a4.nome_loja
+GROUP BY 
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10; 
